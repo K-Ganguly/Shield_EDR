@@ -1,3 +1,4 @@
 .env
 edr_server/.venv/
+edr_agent/.venv
 edr.db
