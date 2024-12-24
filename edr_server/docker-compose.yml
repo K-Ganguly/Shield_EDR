@@ -1,0 +1,13 @@
+services:
+  edr-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edr-server
+    ports:
+      - "5000:5000" 
+    volumes:
+      - .:/app 
+    environment:
+      - ENV=development 
+    restart: unless-stopped

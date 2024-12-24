@@ -1,0 +1,13 @@
+services:
+  edr-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edr-agent
+    ports:
+      - "8000:8000" 
+    volumes:
+      - .:/agent 
+    environment:
+      - ENV=development 
+    restart: unless-stopped

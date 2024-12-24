@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Callable
 import asyncio
 import httpx
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 # Environment variables
 from decouple import config
@@ -25,6 +26,7 @@ class EventReporterService:
     def __init__(self, server_url: str):
         self.server_url = server_url
 
+    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(5))
     async def report_event(self, event_type: str):
         """Reports an event asynchronously."""
         event_data = {
@@ -32,20 +34,21 @@ class EventReporterService:
             "timestamp": datetime.now().isoformat(),
         }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(self.server_url, json=event_data)
-            if response.status_code != 201:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Failed to report event: {response.text}",
-                )
-            return response.json()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(self.server_url, json=event_data)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to connect to server: {e}"
+            )
 
 
 # **Event Monitoring Service**
 class EventMonitor:
     """Simulates monitoring events and sends reports periodically."""
-
     def __init__(self, event_reporter: EventReporterService, interval: int = 10):
         self.event_reporter = event_reporter
         self.interval = interval
@@ -53,8 +56,11 @@ class EventMonitor:
     async def monitor(self, event_type: str):
         """Simulates monitoring and reporting events at intervals."""
         while True:
-            print(f"Reporting event: {event_type} at {datetime.now()}")
-            await self.event_reporter.report_event(event_type)
+            try:
+                print(f"Reporting event: {event_type} at {datetime.now()}")
+                await self.event_reporter.report_event(event_type)
+            except Exception as e:
+                print(f"Error while reporting event: {e}")
             await asyncio.sleep(self.interval)
 
 
@@ -86,7 +92,7 @@ if __name__ == "__main__":
     import uvicorn
 
     # Environment variables for the host and port
-    HOST = config("HOST", default="127.0.0.1")
+    HOST = config("HOST", default="0.0.0.0")
     PORT = int(config("PORT", default=8000))
 
     # Create the FastAPI app instance and run
